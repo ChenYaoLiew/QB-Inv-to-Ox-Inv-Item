@@ -12,19 +12,19 @@
         
         <div class="grid grid-cols-2 gap-4 mb-6">
             <div>
-                <input type="checkbox" id="includeImages" class="mr-2">
+                <input type="checkbox" id="includeImages" class="mr-2" checked>
                 <label for="includeImages" class="font-semibold">Images</label>
             </div>
             <div>
-                <input type="checkbox" id="includeStack" class="mr-2">
+                <input type="checkbox" id="includeStack" class="mr-2" checked>
                 <label for="includeStack" class="font-semibold">Stack</label>
             </div>
             <div>
-                <input type="checkbox" id="includeClose" class="mr-2">
+                <input type="checkbox" id="includeClose" class="mr-2" checked>
                 <label for="includeClose" class="font-semibold">Close</label>
             </div>
             <div>
-                <input type="checkbox" id="includeDescription" class="mr-2">
+                <input type="checkbox" id="includeDescription" class="mr-2" checked>
                 <label for="includeDescription" class="font-semibold">Description</label>
             </div>
         </div>
@@ -39,8 +39,8 @@
         </div>
         
         <div class="mb-4">
-            <label for="oxOutput" class="block mb-2 font-semibold">OX Inventory JSON</label>
-            <textarea id="oxOutput" rows="10" class="w-full p-2 border rounded" readonly placeholder="Converted inventory will appear here"></textarea>
+            <label for="oxOutput" class="block mb-2 font-semibold">OX Inventory Lua</label>
+            <textarea id="oxOutput" rows="10" class="w-full p-2 border rounded font-mono" readonly placeholder="Converted inventory will appear here"></textarea>
         </div>
         
         <div id="errorDisplay" class="text-red-500 text-center mb-4"></div>
@@ -84,6 +84,30 @@
             return convertTable(luaString);
         }
 
+        function convertToLuaFormat(obj) {
+            if (typeof obj !== 'object' || obj === null) {
+                if (typeof obj === 'string') {
+                    return `"${obj}"`;
+                }
+                return obj;
+            }
+
+            const items = [];
+            for (const [key, value] of Object.entries(obj)) {
+                if (typeof value === 'object' && value !== null) {
+                    items.push(`        ${key} = ${convertToLuaFormat(value)}`);
+                } else {
+                    items.push(`        ${key} = ${convertToLuaFormat(value)}`);
+                }
+            }
+            
+            if (items.length === 0) {
+                return '{}';
+            }
+            
+            return `{\n${items.join(',\n')}\n    }`;
+        }
+
         function convertInventory() {
             const qbInput = document.getElementById('qbInput').value;
             const settings = {
@@ -101,7 +125,7 @@
             
             try {
                 const qbInventory = convertLuaToJson(qbInput);
-                const oxInventory = {};
+                let output = '';
                 
                 for (const [itemName, qbItem] of Object.entries(qbInventory)) {
                     const itemData = {
@@ -127,10 +151,10 @@
                         };
                     }
 
-                    oxInventory[itemName] = itemData;
+                    output += `["${itemName}"] = {\n        label = "${itemData.label}",\n        weight = "${itemData.weight}",\n        stack = ${itemData.stack},\n        close = ${itemData.close},\n        description = "${itemData.description}",\n        client = {\n            image = "${itemData.client?.image}"\n        }\n    },\n\n`;
                 }
                 
-                oxOutputArea.value = JSON.stringify(oxInventory, null, 2);
+                oxOutputArea.value = output.trim();
             } catch (error) {
                 console.error('Conversion error:', error);
                 errorDisplay.textContent = `Error: ${error.message}`;
