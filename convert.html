@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QB to OX Inventory Converter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-6">
+    <div class="max-w-2xl mx-auto bg-white p-8 rounded-lg shadow-md">
+        <h1 class="text-2xl font-bold mb-6 text-center">QB to OX Inventory Converter</h1>
+        
+        <div class="grid grid-cols-2 gap-4 mb-6">
+            <div>
+                <input type="checkbox" id="includeImages" class="mr-2">
+                <label for="includeImages" class="font-semibold">Images</label>
+            </div>
+            <div>
+                <input type="checkbox" id="includeStack" class="mr-2">
+                <label for="includeStack" class="font-semibold">Stack</label>
+            </div>
+            <div>
+                <input type="checkbox" id="includeClose" class="mr-2">
+                <label for="includeClose" class="font-semibold">Close</label>
+            </div>
+            <div>
+                <input type="checkbox" id="includeDescription" class="mr-2">
+                <label for="includeDescription" class="font-semibold">Description</label>
+            </div>
+        </div>
+        
+        <div class="mb-4">
+            <label for="qbInput" class="block mb-2 font-semibold">QB Inventory Items</label>
+            <textarea id="qbInput" rows="10" class="w-full p-2 border rounded" placeholder="Paste your QB inventory items here"></textarea>
+        </div>
+        
+        <div class="flex justify-center mb-4">
+            <button onclick="convertInventory()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Convert</button>
+        </div>
+        
+        <div class="mb-4">
+            <label for="oxOutput" class="block mb-2 font-semibold">OX Inventory JSON</label>
+            <textarea id="oxOutput" rows="10" class="w-full p-2 border rounded" readonly placeholder="Converted inventory will appear here"></textarea>
+        </div>
+        
+        <div id="errorDisplay" class="text-red-500 text-center mb-4"></div>
+        
+        <div class="flex justify-center">
+            <button onclick="copyOutput()" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">Copy Output</button>
+        </div>
+    </div>
+
+    <script>
+        function convertLuaToJson(luaString) {
+            luaString = luaString.replace(/^QBShared\.Items\s*=\s*/, '');
+            
+            function parseLuaValue(value) {
+                if (typeof value === 'number') return value;
+                if (value === 'nil') return null;
+                if (value === 'true') return true;
+                if (value === 'false') return false;
+                if (/^["'].*["']$/.test(value)) {
+                    return value.slice(1, -1);
+                }
+                if (value.startsWith('{') && value.endsWith('}')) {
+                    return convertTable(value);
+                }
+                return value;
+            }
+
+            function convertTable(luaTable) {
+                const result = {};
+                const regex = /\[["']?(\w+)["']?\]\s*=\s*({[^}]+}|"[^"]*"|'[^']*'|\d+|true|false|nil|\w+)/g;
+                let match;
+                
+                while ((match = regex.exec(luaTable)) !== null) {
+                    const key = match[1];
+                    const value = match[2];
+                    result[key] = parseLuaValue(value);
+                }
+                return result;
+            }
+            
+            return convertTable(luaString);
+        }
+
+        function convertInventory() {
+            const qbInput = document.getElementById('qbInput').value;
+            const settings = {
+                includeImages: document.getElementById('includeImages').checked,
+                includeStack: document.getElementById('includeStack').checked,
+                includeClose: document.getElementById('includeClose').checked,
+                includeDescription: document.getElementById('includeDescription').checked
+            };
+            
+            const errorDisplay = document.getElementById('errorDisplay');
+            const oxOutputArea = document.getElementById('oxOutput');
+            
+            errorDisplay.textContent = '';
+            oxOutputArea.value = '';
+            
+            try {
+                const qbInventory = convertLuaToJson(qbInput);
+                const oxInventory = {};
+                
+                for (const [itemName, qbItem] of Object.entries(qbInventory)) {
+                    const itemData = {
+                        label: qbItem.label || itemName,
+                        weight: qbItem.weight || 0
+                    };
+
+                    if (settings.includeStack) {
+                        itemData.stack = !qbItem.unique;
+                    }
+
+                    if (settings.includeClose) {
+                        itemData.close = qbItem.shouldClose !== false;
+                    }
+
+                    if (settings.includeDescription && qbItem.description) {
+                        itemData.description = qbItem.description;
+                    }
+
+                    if (settings.includeImages && qbItem.image) {
+                        itemData.client = {
+                            image: qbItem.image
+                        };
+                    }
+
+                    oxInventory[itemName] = itemData;
+                }
+                
+                oxOutputArea.value = JSON.stringify(oxInventory, null, 2);
+            } catch (error) {
+                console.error('Conversion error:', error);
+                errorDisplay.textContent = `Error: ${error.message}`;
+            }
+        }
+        
+        function copyOutput() {
+            const outputTextarea = document.getElementById('oxOutput');
+            outputTextarea.select();
+            document.execCommand('copy');
+            alert('Copied to clipboard!');
+        }
+    </script>
+</body>
+</html>
